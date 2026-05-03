@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HubSpot Company Sourcer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .fade-in { animation: fadeIn 0.3s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .spinner { border: 3px solid #e5e7eb; border-top-color: #f97316; border-radius: 50%; width: 20px; height: 20px; animation: spin 0.7s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans text-gray-800">
+
+  <div class="max-w-5xl mx-auto py-14 px-6">
+
+    <!-- Header -->
+    <div class="mb-10">
+      <h1 class="text-3xl font-bold text-gray-900">HubSpot Company Sourcer</h1>
+      <p class="text-gray-500 mt-1 text-sm">Search for companies, detect HubSpot usage, and push confirmed companies to your CRM.</p>
+    </div>
+
+    <!-- Search box -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8">
+      <label class="block text-sm font-medium text-gray-700 mb-2">Search query</label>
+      <div class="flex gap-3">
+        <input
+          id="queryInput"
+          type="text"
+          placeholder="e.g. fintech companies in New York with less than 200 employees"
+          class="flex-1 border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent"
+        />
+        <button
+          id="runBtn"
+          onclick="startSearch()"
+          class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Run Search
+        </button>
+      </div>
+      <p class="text-xs text-gray-400 mt-2">
+        Examples: &nbsp;
+        <span class="cursor-pointer hover:text-orange-500" onclick="setQuery('SaaS companies in Austin Texas')">SaaS companies in Austin Texas</span> &nbsp;·&nbsp;
+        <span class="cursor-pointer hover:text-orange-500" onclick="setQuery('digital marketing agencies in London')">digital marketing agencies in London</span> &nbsp;·&nbsp;
+        <span class="cursor-pointer hover:text-orange-500" onclick="setQuery('B2B healthcare software companies in Canada')">B2B healthcare software companies in Canada</span>
+      </p>
+    </div>
+
+    <!-- Progress bar + status -->
+    <div id="progressSection" class="hidden mb-6">
+      <div class="flex items-center gap-3 mb-2">
+        <div id="progressSpinner" class="spinner"></div>
+        <span id="progressText" class="text-sm text-gray-600"></span>
+      </div>
+      <div class="w-full bg-gray-200 rounded-full h-1.5">
+        <div id="progressBar" class="bg-orange-400 h-1.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <!-- Stats row -->
+    <div id="statsSection" class="hidden grid grid-cols-5 gap-4 mb-8">
+      <div class="bg-white rounded-xl border border-gray-200 p-4 text-center">
+        <div id="statFound" class="text-2xl font-bold text-gray-900">0</div>
+        <div class="text-xs text-gray-500 mt-1">Found</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4 text-center">
+        <div id="statLive" class="text-2xl font-bold text-gray-900">0</div>
+        <div class="text-xs text-gray-500 mt-1">Live Sites</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4 text-center">
+        <div id="statNew" class="text-2xl font-bold text-gray-900">0</div>
+        <div class="text-xs text-gray-500 mt-1">New (not in CRM)</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4 text-center">
+        <div id="statConfirmed" class="text-2xl font-bold text-orange-500">0</div>
+        <div class="text-xs text-gray-500 mt-1">Uses HubSpot</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4 text-center">
+        <div id="statPushed" class="text-2xl font-bold text-green-500">0</div>
+        <div class="text-xs text-gray-500 mt-1">Pushed to CRM</div>
+      </div>
+    </div>
+
+    <!-- Results table -->
+    <div id="resultsSection" class="hidden">
+      <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Results</h2>
+      <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Domain</th>
+              <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">HubSpot?</th>
+              <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Confidence</th>
+              <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Signals</th>
+              <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">CRM</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Done banner -->
+    <div id="doneBanner" class="hidden mt-6 bg-green-50 border border-green-200 rounded-xl px-5 py-4 text-sm text-green-800 font-medium"></div>
+    <!-- Error banner -->
+    <div id="errorBanner" class="hidden mt-6 bg-red-50 border border-red-200 rounded-xl px-5 py-4 text-sm text-red-700"></div>
+
+  </div>
+
+  <script>
+    let pollTimer = null;
+    let lastResultCount = 0;
+
+    function setQuery(q) {
+      document.getElementById('queryInput').value = q;
+    }
+
+    async function startSearch() {
+      const query = document.getElementById('queryInput').value.trim();
+      if (!query) return;
+
+      // Reset UI
+      clearInterval(pollTimer);
+      lastResultCount = 0;
+      document.getElementById('resultsBody').innerHTML = '';
+      document.getElementById('doneBanner').classList.add('hidden');
+      document.getElementById('errorBanner').classList.add('hidden');
+      document.getElementById('statsSection').classList.remove('hidden');
+      document.getElementById('resultsSection').classList.remove('hidden');
+      document.getElementById('progressSection').classList.remove('hidden');
+      document.getElementById('progressSpinner').style.display = 'inline-block';
+      ['statFound','statLive','statNew','statConfirmed','statPushed'].forEach(id => {
+        document.getElementById(id).textContent = '0';
+      });
+      setProgressBar(5);
+      document.getElementById('runBtn').disabled = true;
+
+      try {
+        const res = await fetch('/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query }),
+        });
+        const data = await res.json();
+        if (data.error) { showError(data.error); return; }
+        pollTimer = setInterval(() => pollStatus(data.job_id), 2000);
+      } catch (e) {
+        showError('Failed to start search: ' + e.message);
+      }
+    }
+
+    async function pollStatus(jobId) {
+      try {
+        const res = await fetch(`/status/${jobId}`);
+        const job = await res.json();
+        updateStats(job.stats);
+        updateProgress(job.progress);
+        renderNewResults(job.results);
+
+        if (job.status === 'done') {
+          finish(job);
+        } else if (job.status === 'error') {
+          showError(job.error || 'Unknown error');
+          clearInterval(pollTimer);
+          document.getElementById('runBtn').disabled = false;
+        }
+      } catch (e) {
+        // network blip — keep polling
+      }
+    }
+
+    function updateStats(stats) {
+      document.getElementById('statFound').textContent     = stats.found;
+      document.getElementById('statLive').textContent      = stats.live;
+      document.getElementById('statNew').textContent       = stats.new;
+      document.getElementById('statConfirmed').textContent = stats.confirmed;
+      document.getElementById('statPushed').textContent    = stats.pushed;
+    }
+
+    function updateProgress(text) {
+      document.getElementById('progressText').textContent = text || '';
+    }
+
+    function setProgressBar(pct) {
+      document.getElementById('progressBar').style.width = pct + '%';
+    }
+
+    function renderNewResults(results) {
+      if (!results || results.length === lastResultCount) return;
+      const tbody = document.getElementById('resultsBody');
+      for (let i = lastResultCount; i < results.length; i++) {
+        tbody.appendChild(buildRow(results[i]));
+      }
+      lastResultCount = results.length;
+      // rough progress estimate based on results flowing in
+      setProgressBar(Math.min(90, 10 + lastResultCount * 8));
+    }
+
+    function buildRow(r) {
+      const tr = document.createElement('tr');
+      tr.className = 'border-t border-gray-100 fade-in hover:bg-gray-50';
+
+      const hubspotBadge = r.confirmed
+        ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-medium">✓ Yes</span>'
+        : '<span class="text-gray-400 text-xs">No</span>';
+
+      const confidenceBadge = r.confirmed ? confidenceTag(r.confidence) : '';
+
+      const signalsHtml = r.signals && r.signals.length
+        ? r.signals.slice(0, 3).map(s =>
+            `<span class="inline-block bg-gray-100 text-gray-600 rounded px-1.5 py-0.5 text-xs mr-1 mb-1">${escHtml(truncate(s, 40))}</span>`
+          ).join('') + (r.signals.length > 3 ? `<span class="text-xs text-gray-400">+${r.signals.length - 3} more</span>` : '')
+        : '<span class="text-gray-300 text-xs">—</span>';
+
+      const crmBadge = r.pushed
+        ? '<span class="text-green-600 text-xs font-medium">✓ Pushed</span>'
+        : r.confirmed
+          ? '<span class="text-red-400 text-xs">Failed</span>'
+          : '<span class="text-gray-300 text-xs">—</span>';
+
+      tr.innerHTML = `
+        <td class="px-5 py-3 font-medium text-gray-900">
+          <a href="https://${escHtml(r.domain)}" target="_blank" class="hover:text-orange-500 hover:underline">${escHtml(r.domain)}</a>
+        </td>
+        <td class="px-5 py-3">${hubspotBadge}</td>
+        <td class="px-5 py-3">${confidenceBadge}</td>
+        <td class="px-5 py-3 max-w-xs">${signalsHtml}</td>
+        <td class="px-5 py-3">${crmBadge}</td>
+      `;
+      return tr;
+    }
+
+    function confidenceTag(level) {
+      const map = {
+        high:   'bg-green-100 text-green-700',
+        medium: 'bg-yellow-100 text-yellow-700',
+        low:    'bg-gray-100 text-gray-600',
+        none:   'bg-gray-100 text-gray-400',
+      };
+      const cls = map[level] || map.none;
+      return `<span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ${cls}">${level}</span>`;
+    }
+
+    function finish(job) {
+      clearInterval(pollTimer);
+      document.getElementById('progressSpinner').style.display = 'none';
+      setProgressBar(100);
+      updateProgress('Complete');
+      document.getElementById('runBtn').disabled = false;
+      const s = job.stats;
+      const banner = document.getElementById('doneBanner');
+      banner.textContent = `Search complete — ${s.found} domains found, ${s.live} live, ${s.confirmed} using HubSpot, ${s.pushed} pushed to CRM.`;
+      banner.classList.remove('hidden');
+    }
+
+    function showError(msg) {
+      clearInterval(pollTimer);
+      document.getElementById('progressSection').classList.add('hidden');
+      const el = document.getElementById('errorBanner');
+      el.textContent = 'Error: ' + msg;
+      el.classList.remove('hidden');
+      document.getElementById('runBtn').disabled = false;
+    }
+
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function truncate(s, n) {
+      return s.length > n ? s.slice(0, n) + '…' : s;
+    }
+
+    // Allow Enter key to submit
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('queryInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') startSearch();
+      });
+    });
+  </script>
+</body>
+</html>

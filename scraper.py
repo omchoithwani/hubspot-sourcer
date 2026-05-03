@@ -2,6 +2,7 @@
 DuckDuckGo HTML scraper.
 Hits html.duckduckgo.com, parses result URLs, strips each to root domain.
 Rotates user agents and waits 2-4 s per request to stay polite.
+Filters out known non-company domains (social, news, directories, platforms).
 """
 
 import random
@@ -28,11 +29,52 @@ USER_AGENTS = [
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
 ]
 
+# Domains that are directories, platforms, social networks, or news sites —
+# never actual target companies.
+_BLACKLIST = {
+    # Social / professional networks
+    "linkedin.com", "facebook.com", "twitter.com", "x.com",
+    "instagram.com", "tiktok.com", "pinterest.com", "snapchat.com",
+    # Search / big tech
+    "google.com", "bing.com", "yahoo.com", "apple.com",
+    "microsoft.com", "amazon.com", "amazonaws.com",
+    # Developer platforms
+    "github.com", "gitlab.com", "stackoverflow.com", "bitbucket.org",
+    # Video / media
+    "youtube.com", "vimeo.com", "twitch.tv",
+    # Content / blogging platforms
+    "medium.com", "substack.com", "wordpress.com", "wordpress.org",
+    "blogger.com", "tumblr.com", "ghost.io",
+    # News / editorial
+    "techcrunch.com", "forbes.com", "bloomberg.com", "reuters.com",
+    "wsj.com", "nytimes.com", "businessinsider.com", "theguardian.com",
+    "inc.com", "entrepreneur.com", "venturebeat.com", "wired.com",
+    # Company directories / databases
+    "crunchbase.com", "yelp.com", "glassdoor.com", "indeed.com",
+    "angel.co", "angellist.com", "pitchbook.com", "dnb.com",
+    "zoominfo.com", "apollo.io", "clearbit.com", "owler.com",
+    "manta.com", "yellowpages.com", "bbb.org",
+    # Review / comparison sites
+    "g2.com", "capterra.com", "getapp.com", "trustpilot.com",
+    "trustradius.com", "softwareadvice.com", "producthunt.com",
+    # Website builder / hosting platforms
+    "wix.com", "squarespace.com", "godaddy.com", "shopify.com",
+    "webflow.com", "weebly.com",
+    # Tech intelligence / analytics
+    "builtwith.com", "similarweb.com", "semrush.com", "ahrefs.com",
+    "mywot.com", "netify.ai", "wappalyzer.com",
+    # HubSpot itself
+    "hubspot.com",
+    # Misc
+    "reddit.com", "quora.com", "wikipedia.org",
+}
 
-def scrape_domains(query: str) -> list[str]:
+
+def scrape_domains(query: str) -> list:
     """
     Search DuckDuckGo for *query* and return a deduplicated list of root domains
-    found in the results (e.g. 'example.com', not 'https://www.example.com/page').
+    found in the results (e.g. 'example.com').
+    Blacklisted and generic platform domains are excluded automatically.
     Returns an empty list on any network or parse failure.
     """
     time.sleep(random.uniform(2, 4))
@@ -58,15 +100,15 @@ def scrape_domains(query: str) -> list[str]:
     return _parse_domains(resp.text)
 
 
-def _parse_domains(html: str) -> list[str]:
+def _parse_domains(html: str) -> list:
     soup = BeautifulSoup(html, "html.parser")
-    domains: list[str] = []
+    domains = []
 
     # Primary: visible URL spans
     for tag in soup.select("span.result__url, a.result__url"):
         text = tag.get_text(strip=True)
         domain = _to_root_domain(text)
-        if domain:
+        if domain and domain not in _BLACKLIST:
             domains.append(domain)
 
     # Fallback: decode uddg redirect param from result links
@@ -77,12 +119,12 @@ def _parse_domains(html: str) -> list[str]:
                 qs = parse_qs(urlparse(href).query)
                 raw_url = unquote(qs.get("uddg", [""])[0])
                 domain = _to_root_domain(raw_url)
-                if domain:
+                if domain and domain not in _BLACKLIST:
                     domains.append(domain)
 
     # Deduplicate while preserving order
-    seen: set[str] = set()
-    unique: list[str] = []
+    seen = set()
+    unique = []
     for d in domains:
         if d not in seen:
             seen.add(d)

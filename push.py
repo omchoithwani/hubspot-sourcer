@@ -10,6 +10,8 @@ Uses update_company_property() from the existing hubspot_api module for updates.
 Create and search calls are added here to keep hubspot_api.py unchanged.
 """
 
+from typing import Optional
+
 import requests
 
 from hubspot_api import update_company_property
@@ -25,7 +27,7 @@ def _headers(token: str) -> dict:
     }
 
 
-def _find_company_id(domain: str, token: str) -> str | None:
+def _find_company_id(domain: str, token: str) -> Optional[str]:
     """Return the CRM company ID for *domain*, or None if not found."""
     try:
         resp = requests.post(
@@ -57,7 +59,7 @@ def _find_company_id(domain: str, token: str) -> str | None:
     return None
 
 
-def _create_company(domain: str, token: str) -> str | None:
+def _create_company(domain: str, token: str) -> Optional[str]:
     """Create a new Company record and return its ID, or None on failure."""
     try:
         resp = requests.post(

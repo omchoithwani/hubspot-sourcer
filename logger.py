@@ -1,6 +1,6 @@
 """
 Run logger — appends one CSV row to run_log.csv after every completed run.
-Columns: timestamp, query, found, passed_dedup, confirmed, pushed
+Columns: timestamp, query, found, live, passed_dedup, confirmed, pushed
 """
 
 import csv
@@ -8,13 +8,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 LOG_FILE = Path("run_log.csv")
-FIELDNAMES = ["timestamp", "query", "found", "passed_dedup", "confirmed", "pushed"]
+FIELDNAMES = ["timestamp", "query", "found", "live", "passed_dedup", "confirmed", "pushed"]
 
 
 def log_run(
     *,
     query: str,
     found: int,
+    live: int,
     passed_dedup: int,
     confirmed: int,
     pushed: int,
@@ -30,6 +31,7 @@ def log_run(
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "query": query,
                 "found": found,
+                "live": live,
                 "passed_dedup": passed_dedup,
                 "confirmed": confirmed,
                 "pushed": pushed,
